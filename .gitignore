@@ -1,0 +1,2 @@
+# Segredos do firmware (use segredos.example.h como modelo)
+firmware/bipcheck_esp32/segredos.h
