@@ -1,0 +1,18 @@
+# Dependabot: abre PR quando uma dependência tem vulnerabilidade ou atualização.
+# Só avisa, não bloqueia nada.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /app
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

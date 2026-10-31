@@ -1,0 +1,11 @@
+# Padroniza a quebra de linha em LF para todos, independente do sistema ou da config de cada um
+* text=auto eol=lf
+
+# Arquivos binários: nunca converter
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.bin binary

@@ -1,0 +1,3 @@
+-- Seed do Supabase local (roda depois das migrações em `supabase db reset`).
+-- Vazio de propósito: os testes criam os próprios dados fictícios.
+-- Se um dia houver dados de exemplo aqui, eles devem ser fictícios (LGPD).

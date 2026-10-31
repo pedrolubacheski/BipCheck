@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": ["node_modules", "dist", "coverage"],
+  "plugins": ["react", "typescript", "oxc", "import", "jsx-a11y", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "react/no-danger": "error",
+    "react/react-in-jsx-scope": "off",
+    "import/no-default-export": "error",
+    "import/no-unassigned-import": "off",
+    "no-console": ["warn", { "allow": ["error"] }]
+  },
+  "overrides": [
+    {
+      "files": ["*.config.ts"],
+      "rules": { "import/no-default-export": "off" }
+    },
+    {
+      "files": ["src/app/router.tsx"],
+      "rules": { "react/only-export-components": "off" }
+    }
+  ]
+}
