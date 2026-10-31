@@ -18,7 +18,11 @@ ESP32 --HTTPS POST {device_token, uid}--> Edge Function "registrar-embarque"
 
 O banco do projeto está em `us-east-1`, por isso o firmware pede a função nessa região (`x-region: us-east-1`).
 
-## 2. Firmware (Arduino IDE)
+## 2. Painel do motorista (React)
+
+Veja `app/README.md`. Resumo: `cd app && npm install && npm run dev -- --host`, e abra no notebook ou no celular (mesmo Wi-Fi).
+
+## 3. Firmware (Arduino IDE)
 
 1. Instale o suporte ao ESP32 (Gerenciador de Placas: "esp32" da Espressif) e a biblioteca **MFRC522** (miguelbalboa).
 2. Na pasta `firmware/bipcheck_esp32/`, copie `segredos.example.h` para `segredos.h` e preencha WiFi (2,4 GHz), URL da função e `device_token`. O `segredos.h` está no `.gitignore`: **nunca faça commit dele**.

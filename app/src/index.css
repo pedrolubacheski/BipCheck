@@ -1,0 +1,94 @@
+:root {
+  --verde: #0f766e;
+  --verde-claro: #ccfbf1;
+  --texto: #1f2937;
+  --cinza: #6b7280;
+  --borda: #e5e7eb;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--texto);
+  background: #f3f4f6;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+h1, h2 { margin: 0; }
+h2 { font-size: 1rem; margin: 1.5rem 0 0.5rem; color: var(--cinza); }
+
+button {
+  font: inherit;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 10px;
+  background: var(--verde);
+  color: white;
+  cursor: pointer;
+  width: 100%;
+}
+button:disabled { opacity: 0.6; }
+button.secundario { background: white; color: var(--texto); border: 1px solid var(--borda); margin-top: 1rem; }
+button.link { background: none; color: var(--cinza); padding: 0; width: auto; }
+
+input {
+  font: inherit;
+  width: 100%;
+  padding: 0.7rem;
+  margin-top: 0.3rem;
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+}
+
+.centro { text-align: center; margin-top: 30vh; }
+.erro { color: #b91c1c; }
+.sub { color: var(--cinza); margin: 0; }
+.marca { color: var(--verde); font-size: 1.5rem; }
+
+.tela-login { min-height: 100vh; display: grid; place-items: center; padding: 1rem; }
+.cartao {
+  width: 100%;
+  max-width: 360px;
+  background: white;
+  padding: 1.5rem;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 4px 20px rgb(0 0 0 / 0.06);
+}
+.cartao label { color: var(--cinza); font-size: 0.9rem; }
+
+.painel { max-width: 560px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+.topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.status { font-size: 0.85rem; padding: 0.3rem 0.7rem; border-radius: 999px; }
+.status.on { background: var(--verde-claro); color: var(--verde); }
+.status.off { background: var(--borda); color: var(--cinza); }
+
+.contador { background: var(--verde); color: white; border-radius: 16px; padding: 1.25rem; display: flex; align-items: baseline; gap: 0.6rem; }
+.contador strong { font-size: 3rem; line-height: 1; }
+
+.alunos, .historico { list-style: none; padding: 0; margin: 1rem 0 0; }
+.alunos li {
+  background: white;
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.4s;
+}
+.alunos .nome { display: block; font-weight: 600; }
+.alunos .cidade { font-size: 0.8rem; color: var(--cinza); }
+.alunos .situacao { color: var(--cinza); font-size: 0.9rem; }
+.alunos li.embarcou { border-color: var(--verde); }
+.alunos li.embarcou .situacao { color: var(--verde); font-weight: 600; }
+.alunos li.novo { background: var(--verde-claro); animation: pulo 0.6s ease; }
+
+@keyframes pulo {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+.historico li { display: grid; grid-template-columns: 5.5rem 1fr auto; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid var(--borda); font-size: 0.9rem; }
+.historico code { color: var(--cinza); }
