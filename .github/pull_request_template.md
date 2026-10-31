@@ -19,7 +19,7 @@
 ## Checklist
 
 - [ ] `CHANGELOG.md` atualizado com a entrada desta implementação
-- [ ] Nenhum segredo no diff (`segredos.h`, `.env`, senha de Wi-Fi, `device_token`, `service_role`)
+- [ ] Nenhum segredo no diff (`secrets.h`, `.env`, senha de Wi-Fi, `device_token`, `service_role`)
 - [ ] Nenhum dado real de aluno em código, seeds, testes ou prints
 - [ ] CI verde (estáticos, unitários e integração)
 - [ ] Testes novos para o que mudou (bug corrigido tem teste que o reproduz; tabela, RLS ou RPC nova tem teste)

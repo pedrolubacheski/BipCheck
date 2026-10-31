@@ -59,43 +59,71 @@
 ## 3. Arquitetura atual (o que já funciona)
 
 ```
-[Cartão RFID] -> [ESP32 + RC522] --HTTPS POST {device_token, uid}--> Edge Function "registrar-embarque" (Supabase)
-     --RPC--> função SQL registrar_embarque --INSERT--> tabela embarques --Realtime--> painel do motorista (React)
+[Cartão RFID] -> [ESP32 + RC522] --HTTPS POST {device_token, uid}--> Edge Function "register-boarding" (Supabase)
+     --RPC--> register_boarding (Postgres) --INSERT--> boardings --Realtime--> app do motorista (PWA)
 ```
 
-- O ESP32 **não tem login**: ele se identifica pelo `device_token` da van.
+- O ESP32 **não tem login**: ele se identifica pelo `device_token` do leitor (no banco fica só o hash SHA-256).
 - A Edge Function usa a `service_role` (só no servidor) e chama a RPC numa única ida ao banco.
-- O painel usa só a **chave pública** do Supabase; quem protege os dados é a **RLS**.
-- Tempo do bip ao registro: ~0,25 a 0,57 s (resolvido em 31/10; banco e função em `us-east-1`, o firmware manda `x-region: us-east-1`).
+- O app usa só a **chave pública** do Supabase; quem protege os dados é a **RLS**.
+- Tempo do bip ao registro no protótipo: ~0,25 a 0,57 s (banco e função em `us-east-1`, o firmware manda `x-region: us-east-1`).
+- Diagramas: `docs/diagrams/architecture.md`. Decisão completa: `docs/decisions/0001-architecture.md`.
 
 ### Estrutura do repositório
 
 ```
-README.md                         como montar tudo (Supabase, app, firmware)
+README.md                         como montar e rodar tudo
 CHANGELOG.md                      histórico de construção: cada implementação registra o que mudou
 CLAUDE.md                         contexto e regras do projeto (este arquivo)
-.gitattributes                    padroniza quebra de linha (LF) para toda a equipe
-.github/pull_request_template.md  modelo de descrição de PR, com checklist
-firmware/bipcheck_esp32/
-  bipcheck_esp32.ino              leitura do RC522, POST HTTPS, buzzer
-  segredos.example.h              modelo; o segredos.h real fica fora do Git
+package.json                      ferramentas da raiz (Deno e CLI do Supabase via npm) e `npm run check`
+.github/
+  pull_request_template.md        modelo de descrição de PR, com checklist
+  workflows/ci.yml                CI: gitleaks, estáticos, unitários, builds e integração
+  dependabot.yml
+app/                              PWA (React + Vite + TypeScript + Tailwind), ver seção 7.1
+  src/app/                        rotas, layout e proteções de rota
+  src/features/<feature>/         auth, companies, vans, devices, students, boardings
+  src/shared/                     componentes, hooks e utilitários genéricos
+  src/lib/                        cliente do Supabase e tipos do banco
+firmware/                         PlatformIO
+  platformio.ini                  ambientes esp32dev (placa) e native (testes no PC)
+  include/                        config.h, root_ca.h, secrets.example.h (o secrets.h real fica fora do Git)
+  lib/bipcheck_core/              lógica pura testável no PC (UID, payload, bips, debounce)
+  src/                            main.cpp, api_client, card_reader, buzzer, wifi_connection
+  test/test_core/                 testes Unity da lógica pura
 supabase/
-  schema.sql                      tabelas, RLS e Realtime (passo 1)
-  passo2_registrar_embarque.sql   função registrar_embarque (security definer, só service_role executa)
-  functions/registrar-embarque/index.ts   Edge Function (Deno)
+  config.toml                     configuração do Supabase local (CLI)
+  migrations/                     esquema versionado (uma migração por arquivo, em ordem)
+  tests/                          testes pgTAP (estrutura, isolamento, embarque, auditoria)
+  functions/register-boarding/    Edge Function (handler testável separado do Deno.serve)
+docs/
+  decisions/                      ADRs
+  diagrams/                       diagramas Mermaid
+  testing/                        roteiros manuais (hardware, ponta a ponta)
 ```
-
-O painel do motorista ainda não está no repositório (ver seção 4).
 
 ### Banco (Supabase / Postgres)
 | Tabela | Conteúdo |
 |---|---|
-| `vans` | `id`, `nome`, `dono_id` (auth.users), `device_token` (único) |
-| `alunos` | `id`, `dono_id`, `nome`, `cidade` |
-| `cartoes` | `uid` (PK, hex maiúsculo), `aluno_id`, `van_id` |
-| `embarques` | `id`, `van_id`, `aluno_id`, `cartao_uid`, `embarcou_em` (publicada no Realtime) |
+| `companies` | empresa (dono de frota) |
+| `company_members` | `user_id`, `email`, `role` (`owner` / `driver`) |
+| `vans` | vans da empresa |
+| `van_drivers` | motoristas vinculados a cada van |
+| `devices` | leitores ESP32: `van_id`, `token_hash`, `last_seen_at` |
+| `students` | `name`, `city` |
+| `cards` | `uid` (hex maiúsculo, único por empresa), `student_id`, `active`; vale em qualquer van da empresa |
+| `boardings` | `van_id`, `student_id`, `device_id`, `card_id`, `boarded_at` (Realtime; 3 meses) |
+| `audit_logs` | quem fez o quê, sem dado pessoal (30 dias) |
 
-RLS ligada em todas: o dono gerencia as próprias vans, alunos e cartões; em `embarques` o dono só lê, quem grava é a função.
+- Todas com `company_id` e RLS. FKs compostas `(id, company_id)` impedem ligar registros de empresas diferentes.
+- Funções (RPC): `create_company`, `add_company_member`, `create_device`, `rotate_device_token` (app) e `register_boarding` (só a Edge Function).
+- **Status do `register_boarding`:**
+  - `registered`: embarque gravado;
+  - `duplicate`: mesmo aluno e van em menos de 2 min;
+  - `invalid_device`: token não reconhecido;
+  - `device_unassigned`: leitor sem van;
+  - `unknown_card`: cartão não cadastrado ou desativado;
+  - `rate_limited`: mais de 1 requisição por segundo do mesmo leitor.
 
 ### Hardware
 - ESP32 DevKit WROOM-32 (USB CP2102; no Windows precisa do driver CP210x, aparece como COM3) + leitor RC522 (Mifare 13,56 MHz).
@@ -107,17 +135,16 @@ RLS ligada em todas: o dono gerencia as próprias vans, alunos e cartões; em `e
 
 ## 4. Estado atual (31/10/2026)
 
-- ✅ Leitor montado e lendo UID; firmware enviando para o Supabase com bip rápido (PR #1, já na `main`).
-- ✅ Supabase no ar (projeto ref `xjqaxqorgzcvocgfbqrh`, região us-east-1).
-- ❌ Painel do motorista de teste (PR #2, Vite + React): a interface foi testada, mas o PR foi **fechado sem merge** e a branch `feat/app-motorista` apagada. O painel definitivo ainda será feito.
-- 🔄 Cadastro de tags pelo app ainda não existe (hoje é pelo painel do Supabase).
-- ⚠️ **Urgente:** a senha do Wi-Fi e o `device_token` aparecem no histórico do Git. Precisam ser trocados.
-- ⚠️ Hoje o único usuário do Supabase é a conta do Pedro (dona da única van). Gabriel e Kauê ainda precisam de acesso.
+- ✅ Projeto reconstruído no padrão da seção 7 (branch `feat/dev-architecture`): banco multi-tenant, Edge Function `register-boarding`, firmware no PlatformIO, app completo (cadastros + embarques em tempo real), testes e CI.
+- ⏳ **Ainda não aplicado no Supabase remoto.** O remoto ainda tem o esquema do protótipo (`vans`, `alunos`, `cartoes`, `embarques` e a função `registrar-embarque`). Aplicar as migrações apaga esses dados de teste: pedir aprovação antes (seção 1).
+- ⏳ Firmware novo ainda não gravado no ESP32. Depois de aplicar o banco: cadastrar o leitor no app, colocar o token no `secrets.h` e rodar `docs/testing/hardware-checklist.md`.
+- ⏳ A primeira execução da CI vai validar o que não dá para rodar nos notebooks: pgTAP, integração, compilação e testes do firmware.
+- ⚠️ A senha do Wi-Fi e o `device_token` do protótipo aparecem no histórico do Git. Ambos deixam de valer: o Wi-Fi era só de teste e o token antigo some com o esquema do protótipo.
 
-### Pendências técnicas conhecidas (para a próxima versão do banco)
-- `cartoes.uid` é PK global e `cartoes` tem `van_id`: um cartão só vale para uma van, o que contradiz a ideia de que a tag é do aluno.
-- Toques repetidos geram várias linhas em `embarques`.
-- Falta a tabela de motoristas por van e o conceito de viagem (ida/volta).
+### Fora da v1 / próximos passos conhecidos
+- Conceito de viagem (ida/volta) e exceções (aluno que vai numa van e volta em outra, aluno que só volta).
+- Tela de auditoria completa para o dono (hoje a auditoria aparece só em "Cartões lidos e não cadastrados").
+- Modo offline do leitor, hospedagem do PWA, MFA (antes do primeiro cliente real), testes E2E com Playwright.
 
 ---
 
@@ -153,7 +180,7 @@ RLS ligada em todas: o dono gerencia as próprias vans, alunos e cartões; em `e
 
 ### GitHub
 - Repositório: https://github.com/pedrolubacheski/BipCheck (dono: Pedro). Também aparece como `pedrolubacheski/BipQueck`; é o mesmo repositório.
-- Branches: só `main` (estável) por enquanto. Convenção usada até agora: `fix/...`, `feat/...`.
+- Branches: `main` (estável) e as branches de trabalho no padrão da seção 7.6.
 - Acesso local: `git` com a conta do GitHub de cada um. Para PRs pelo terminal, a CLI `gh` (`gh auth login`), se instalada.
 - Lembre da regra da seção 1: avisar e esperar aprovação antes de commit/push/branch/PR.
 
@@ -162,8 +189,8 @@ RLS ligada em todas: o dono gerencia as próprias vans, alunos e cartões; em `e
 - URL da API: `https://xjqaxqorgzcvocgfbqrh.supabase.co`.
 - **Chave publishable/anon:** vai só no `app/.env.local` (copiar de `app/.env.example`). Pegar em Project Settings > API.
 - **service_role:** nunca sai do Supabase. Só a Edge Function usa, via variável de ambiente do próprio Supabase.
-- **device_token:** coluna `vans.device_token`; vai só no `firmware/bipcheck_esp32/segredos.h`.
-- CLI (opcional): `npx supabase login`, `npx supabase link --project-ref xjqaxqorgzcvocgfbqrh`, `npx supabase functions deploy registrar-embarque --no-verify-jwt`. O código de teste atual foi aplicado colando os arquivos de `supabase/` no SQL Editor; a partir da reconstrução, toda mudança vai por migração em `supabase/migrations/` (seção 7.2).
+- **device_token:** gerado pelo app em "Leitores" (aparece uma vez); vai só no `firmware/include/secrets.h`. No banco fica só o hash (`devices.token_hash`).
+- CLI (vem com `npm install` na raiz): `npx supabase login`, `npx supabase link --project-ref xjqaxqorgzcvocgfbqrh`, `npx supabase db push` (aplica migrações), `npx supabase functions deploy register-boarding --no-verify-jwt`. Toda mudança de banco vai por migração em `supabase/migrations/` (seção 7.2), aplicada no remoto só depois da CI verde e com aprovação.
 - **MCP do Supabase:** o Claude tem acesso total (conector do Supabase do claude.ai ou `claude mcp add --transport http supabase "https://mcp.supabase.com/mcp?project_ref=xjqaxqorgzcvocgfbqrh"`, autenticado com uma conta que tenha acesso ao projeto).
   - Consultas de leitura (listar tabelas, ver logs, advisors, `select`) podem ser feitas livremente.
   - **Qualquer coisa que altere o projeto** (SQL que escreve ou muda estrutura, migração, deploy de função, secrets, branches, pausar/restaurar) **só depois de perguntar**, explicando: o que vai rodar (o SQL ou comando exato), o que muda e qual o risco (perda de dados, quebra do ESP32 ou do app, exposição de dados). Esperar o "pode" explícito.
@@ -180,35 +207,26 @@ RLS ligada em todas: o dono gerencia as próprias vans, alunos e cartões; em `e
   - **Criar cartões só quando alguém pedir.** Os cartões são cadastrados pelos humanos; isso evita cartões inúteis.
 
 ### ESP32 / firmware
-- **Ferramenta decidida: PlatformIO** (extensão do VS Code). O firmware será migrado para ele na reconstrução; os comandos abaixo valerão a partir daí:
+- **PlatformIO** (extensão do VS Code), pasta `firmware/`. Placa, framework e bibliotecas (MFRC522) ficam fixos no `platformio.ini`, então todo mundo compila igual.
   ```
-  pio run                      # compila
-  pio run -t upload            # grava no ESP32
-  pio device monitor           # Serial Monitor (115200, definido no platformio.ini)
-  pio test                     # testes do firmware
+  pio run -t upload            # compila e grava no ESP32 (no Windows aparece como COM3)
+  pio device monitor           # Serial Monitor (115200)
+  pio test -e native           # testes da lógica pura, no PC (sem ESP32)
+  pio check -e esp32dev        # análise estática (cppcheck)
   ```
-  Placa, framework e bibliotecas (ex.: MFRC522) ficam declarados em `firmware/platformio.ini`, então todo mundo compila igual.
-- **Firmware de teste atual** (até a migração): Arduino IDE 2 + core "esp32" da Espressif + biblioteca **MFRC522** (miguelbalboa). Placa "ESP32 Dev Module", Serial Monitor em 115200.
-- Ou pelo terminal com **Arduino CLI**:
-  ```
-  arduino-cli core install esp32:esp32
-  arduino-cli lib install MFRC522
-  arduino-cli compile --fqbn esp32:esp32:esp32 firmware/bipcheck_esp32
-  arduino-cli upload  --fqbn esp32:esp32:esp32 -p COM3 firmware/bipcheck_esp32
-  arduino-cli monitor -p COM3 -c baudrate=115200
-  ```
-- Antes de compilar: copiar `segredos.example.h` para `segredos.h` e preencher. **Nunca commitar o `segredos.h`.**
+- Antes de compilar: copiar `include/secrets.example.h` para `include/secrets.h` e preencher. **Nunca commitar o `secrets.h`.**
+- Teste no aparelho: roteiro em `docs/testing/hardware-checklist.md`.
 
-### Painel do motorista
-> Comandos do painel de teste (PR #2, fechado). Valem quando o painel definitivo existir, se ele usar Vite.
+### App
 ```
 cd app
+cp .env.example .env.local   # URL e chave pública do Supabase
 npm install
-npm run dev -- --host     # abre em http://localhost:5173 e no celular pelo IP mostrado em "Network"
-npm run lint              # oxlint
+npm run dev -- --host        # abre em http://localhost:5173 e no celular pelo IP mostrado em "Network"
+npm run check                # typecheck, lint, formatação, knip e testes unitários
 npm run build
 ```
-Login com o usuário dono da van (Supabase > Authentication > Users).
+Na raiz, `npm run check` roda as verificações locais do app e das Edge Functions (as mesmas da CI, menos a integração).
 
 ### Outros materiais
 - Guia didático do projeto: https://claude.ai/artifact/Hwk5tuUNspsdppCkQPyxLT
@@ -219,7 +237,7 @@ Login com o usuário dono da van (Supabase > Authentication > Users).
 
 ## 7. Arquitetura de desenvolvimento
 
-> Decidida em 31/10/2026. O código atual (schema, Edge Function, firmware) foi feito para **teste** e será **reconstruído** neste padrão.
+> Decidida em 31/10/2026 e aplicada no projeto inteiro na mesma data (ver `docs/decisions/0001-architecture.md`).
 > Objetivo: simples de entender e manter hoje, preparado para virar **SaaS** em ~2 anos sem precisar jogar nada fora.
 > Para introduzir um padrão que não está aqui, **pergunte antes**.
 
@@ -255,7 +273,8 @@ app/src/
 **Regras da arquitetura:**
 - **Componentes nunca chamam o Supabase direto.** Só os `services/` de cada feature acessam o banco. Assim, trocar ou expandir o backend no futuro mexe só nessa camada.
 - **A tela nunca recebe a linha crua do banco**, só o tipo da feature (`types.ts`). Quando o formato do banco e o da tela forem diferentes, o service converte com uma função simples (`toStudent(row)`).
-- Uma feature não importa arquivos internos de outra; o que for compartilhado vai para `shared/`.
+- **Cada feature tem um `index.ts` com a sua API pública.** Outras features e o `app/` importam só de `@/features/<feature>/index.ts`, nunca de arquivos internos. O que for genérico vai para `shared/`.
+- Contextos de feature (ex.: usuário logado, empresa atual) ficam na própria feature (`AuthContext`, `CompanyContext`) e são expostos pelo `index.ts`.
 - Os hooks (`useBoardings`, `useVans`) ligam services e componentes (carregamento, erro, Realtime).
 
 **Equivalência com a arquitetura em camadas clássica** (Controller/Service/Repository/DTO/Mapper). Usamos a versão leve, porque o Supabase já é o servidor:
@@ -305,7 +324,7 @@ Se um dia o SaaS precisar de **backend próprio** (ex.: NestJS) para regras comp
 - **Idioma:**
   - **Código em inglês:** tabelas, colunas, funções SQL, variáveis, funções, componentes, pastas e arquivos (ex.: `students`, `register_boarding`, `BoardingList.tsx`, `features/boardings/`).
   - **Em português:** comentários, mensagens de commit, PRs, `CHANGELOG.md`, `CLAUDE.md`, `docs/` e textos que aparecem para o usuário na tela.
-  - O código de teste atual (`registrar_embarque`, `embarques`...) está em português e será renomeado na reconstrução.
+  - O código do protótipo (em português) foi substituído na reconstrução; não reintroduza nomes em português no código.
 - **Componentes:** PascalCase, um componente por arquivo, `.tsx` (ex.: `BoardingList.tsx`). Hooks com prefixo `use`, em camelCase (ex.: `useBoardings.ts`).
 - **Outros arquivos:** camelCase (ex.: `boardingService.ts`, `formatDate.ts`).
 - **Exportação:** só `export` nomeado, nunca `export default` (evita o mesmo item importado com nomes diferentes). Exceção: arquivos de configuração que exigem default (ex.: `vite.config.ts`).
@@ -469,7 +488,7 @@ Ficam para o fim, depois que a arquitetura, os padrões e os testes estiverem de
 
 ## 8. Checklist de segredos (antes de qualquer commit)
 
-- [ ] Nenhum `segredos.h`, `.env`, `.env.local` no diff.
+- [ ] Nenhum `secrets.h`, `.env`, `.env.local` no diff.
 - [ ] Nenhuma senha de Wi-Fi, `device_token`, `service_role` ou senha de usuário em código, comentário, README ou print.
 - [ ] Nenhum dado real de aluno (nome, cidade) em seeds, testes ou exemplos.
 - [ ] Se algo vazou: avisar a equipe e **trocar a credencial**; apagar do código não basta, porque fica no histórico do Git.

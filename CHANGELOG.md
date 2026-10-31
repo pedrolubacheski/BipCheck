@@ -28,6 +28,51 @@ Modelo:
 
 ---
 
+## 2026-10-31: Reconstrução do projeto no padrão definido
+**Autor:** Gabriel · **Área:** Banco, Edge Function, Firmware, App, Docs
+
+O protótipo foi reconstruído seguindo as decisões do `CLAUDE.md` (resumo em `docs/decisions/0001-architecture.md`).
+
+### Adicionado
+- **Banco multi-tenant** (`supabase/migrations/`):
+  - empresas, membros com papel (dono/motorista), vans, motoristas por van, leitores, alunos, cartões e embarques;
+  - RLS em toda tabela, FKs compostas impedindo mistura entre empresas, índices em toda FK.
+- **Funções:**
+  - `create_company`, `add_company_member`, `create_device` e `rotate_device_token`;
+  - `register_boarding`, que trata toque repetido (2 min), limite de 1 requisição por segundo por leitor, cartão desativado e leitor sem van.
+- **Auditoria** (`audit_logs`), gravada por triggers, sem dado pessoal. **Retenção** com pg_cron: embarques 3 meses, auditoria 30 dias.
+- **Edge Function `register-boarding`:** validação com Zod, limite por IP, erros genéricos e logs sem token.
+- **Firmware no PlatformIO, em módulos:**
+  - valida o certificado do servidor (raízes GTS);
+  - leitura e rede em tarefas separadas, então o leitor não trava sem internet;
+  - bip sem `delay`;
+  - ignora o mesmo cartão por 3 s.
+- **App** (React + TypeScript + Tailwind, por feature):
+  - login e cadastro, criação de empresa, equipe;
+  - vans e motoristas, leitores (token mostrado uma vez e troca de token);
+  - alunos e cartões, com "cartões lidos e não cadastrados";
+  - embarques em tempo real com bip;
+  - manifest do PWA.
+- **Testes:**
+  - pgTAP (estrutura, isolamento entre empresas, embarque, auditoria e retenção);
+  - `deno test` (Edge Function, unitários e integração);
+  - Vitest (app, unitários e integração);
+  - Unity (lógica do firmware no PC).
+- **CI no GitHub Actions** (gitleaks, estáticos, unitários, builds e integração com Supabase local) e **Dependabot**.
+- **Documentação:** ADR 0001, diagramas Mermaid e roteiros de teste manual (`docs/testing/`).
+
+### Alterado
+- Código renomeado para inglês (`registrar-embarque` → `register-boarding`, `segredos.h` → `secrets.h`).
+- `device_token` guardado só como hash SHA-256.
+
+### Removido
+- Esquema, função e firmware do protótipo (`schema.sql`, `passo2_registrar_embarque.sql`, `bipcheck_esp32.ino`). A migração `20261031120000_remove_prototype.sql` apaga as tabelas antigas, que só tinham dados de teste.
+
+### Pendente
+- Aplicar as migrações e publicar a função no Supabase remoto (precisa de aprovação, porque apaga os dados de teste do protótipo).
+- Gravar o firmware novo no ESP32 com o token gerado pelo app e rodar `docs/testing/hardware-checklist.md`.
+- Viagens (ida/volta), modo offline, tela de auditoria completa e hospedagem do PWA.
+
 ## 2026-10-31: Organização do projeto e decisões de arquitetura
 **Autor:** Gabriel · **Área:** Docs
 

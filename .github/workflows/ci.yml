@@ -1,0 +1,152 @@
+# CI do BipCheck: roda a pirâmide de testes inteira em todo PR e push na main.
+# Os notebooks da equipe rodam só estáticos e unitários; a integração (Supabase local, Docker) roda aqui.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Segredos (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  app:
+    name: App (estáticos + unitários + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run knip
+      - run: npm audit --audit-level=high
+      - run: npm run test:coverage
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_ANON_KEY: ci-placeholder
+
+  functions:
+    name: Edge Functions (estáticos + unitários)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase/functions/register-boarding
+    steps:
+      - uses: actions/checkout@v7
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+      - run: deno task check
+      - run: deno task test
+
+  firmware:
+    name: Firmware (estáticos + unitários + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/cache@v6
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('firmware/platformio.ini') }}
+      - run: pip install platformio==6.2.0
+      # Segredos fictícios só para compilar (os reais nunca entram no Git)
+      - run: cp include/secrets.example.h include/secrets.h
+      - run: pio test -e native
+      - run: pio check -e esp32dev --fail-on-defect=medium
+      - run: pio run -e esp32dev
+
+  integration:
+    name: Integração (Supabase local)
+    needs: [app, functions]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.122.0
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Sobe o Supabase local (aplica as migrações)
+        run: supabase start -x studio,imgproxy,storage-api,logflare,vector,supavisor,mailpit
+
+      - name: Exporta URL e chaves do Supabase local
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+          } >> "$GITHUB_ENV"
+
+      - name: Lint do banco (plpgsql_check)
+        run: supabase db lint --level warning --fail-on error
+
+      - name: Testes do banco (pgTAP)
+        run: supabase test db
+
+      - name: Tipos do banco batem com o código do app
+        run: |
+          supabase gen types typescript --local > app/src/lib/database.types.ts
+          cd app && npm ci && npm run typecheck
+
+      - name: Sobe a Edge Function
+        run: |
+          supabase functions serve > functions.log 2>&1 &
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$SUPABASE_URL/functions/v1/register-boarding" || true)
+            [ "$code" = "405" ] && exit 0
+            sleep 2
+          done
+          cat functions.log
+          exit 1
+
+      - name: Integração da Edge Function
+        working-directory: supabase/functions/register-boarding
+        run: deno task test:integration
+
+      - name: Integração dos services do app
+        working-directory: app
+        run: npm run test:integration
+        env:
+          VITE_SUPABASE_URL: ${{ env.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ env.SUPABASE_ANON_KEY }}

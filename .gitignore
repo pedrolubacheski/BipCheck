@@ -1,2 +1,26 @@
-# Segredos do firmware (use segredos.example.h como modelo)
+# Segredos: nunca entram no Git (use os arquivos .example como modelo)
+firmware/include/secrets.h
 firmware/bipcheck_esp32/segredos.h
+.env
+.env.*
+!.env.example
+
+# Dependências e builds
+node_modules/
+dist/
+coverage/
+.pio/
+
+# Supabase local
+supabase/.temp/
+supabase/.branches/
+
+# Claude Code (arquivo pessoal)
+CLAUDE.local.md
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
