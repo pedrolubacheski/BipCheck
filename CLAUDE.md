@@ -136,9 +136,11 @@ docs/
 ## 4. Estado atual (31/10/2026)
 
 - ✅ Projeto reconstruído no padrão da seção 7 (branch `feat/dev-architecture`): banco multi-tenant, Edge Function `register-boarding`, firmware no PlatformIO, app completo (cadastros + embarques em tempo real), testes e CI.
-- ⏳ **Ainda não aplicado no Supabase remoto.** O remoto ainda tem o esquema do protótipo (`vans`, `alunos`, `cartoes`, `embarques` e a função `registrar-embarque`). Aplicar as migrações apaga esses dados de teste: pedir aprovação antes (seção 1).
-- ⏳ Firmware novo ainda não gravado no ESP32. Depois de aplicar o banco: cadastrar o leitor no app, colocar o token no `secrets.h` e rodar `docs/testing/hardware-checklist.md`.
-- ⏳ A primeira execução da CI vai validar o que não dá para rodar nos notebooks: pgTAP, integração, compilação e testes do firmware.
+- ✅ Novo esquema aplicado no Supabase remoto e Edge Function `register-boarding` publicada (o esquema do protótipo saiu).
+- ✅ Firmware novo gravado no ESP32, conectando pelo Wi-Fi de casa.
+- ✅ **Primeira validação ponta a ponta (31/10/2026):** dono cadastrou empresa, van, motorista, aluno e leitor; o cartão desconhecido apareceu em "Cartões lidos e não cadastrados" (HTTP 404, 3 bips), foi vinculado ao aluno e o embarque seguinte apareceu sozinho no celular do motorista (HTTP 200, bip longo).
+- ✅ Reconstrução mergeada na `main` (PR #3).
+- ⏳ Falta no roteiro de hardware: toque repetido, leitor sem Wi-Fi e medir o tempo do bip até o registro (meta < 1 s).
 - ⚠️ A senha do Wi-Fi e o `device_token` do protótipo aparecem no histórico do Git. Ambos deixam de valer: o Wi-Fi era só de teste e o token antigo some com o esquema do protótipo.
 
 ### Fora da v1 / próximos passos conhecidos

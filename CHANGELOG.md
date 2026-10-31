@@ -28,6 +28,24 @@ Modelo:
 
 ---
 
+## 2026-10-31: Primeira validação ponta a ponta
+**Autor:** Gabriel · **Área:** Docs
+
+Primeiro teste completo do sistema reconstruído, com o banco aplicado no Supabase remoto e o firmware novo gravado no ESP32. Nenhum código mudou.
+
+### Validado
+- Dono cria empresa e van no app (notebook); motorista cria conta no celular, é adicionado na Equipe e vinculado à van.
+- Leitor cadastrado no app; token colocado no `secrets.h`; ESP32 conecta no Wi-Fi e aquece a conexão HTTPS.
+- Cartão não cadastrado: leitor recebe HTTP 404 e dá 3 bips; o cartão aparece em "Cartões lidos e não cadastrados" e é vinculado ao aluno.
+- Cartão cadastrado: HTTP 200, bip longo, e o embarque aparece sozinho (Realtime) na tela do motorista no celular.
+
+### Pendente
+- Resto do roteiro `docs/testing/hardware-checklist.md`: toque repetido e leitor sem Wi-Fi.
+- Medir o tempo do bip até o registro (meta < 1 s).
+- Regras de negócio (viagens ida/volta e exceções) ficam para outra etapa.
+
+---
+
 ## 2026-10-31: Reconstrução do projeto no padrão definido
 **Autor:** Gabriel · **Área:** Banco, Edge Function, Firmware, App, Docs
 
