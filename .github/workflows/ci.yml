@@ -85,7 +85,7 @@ jobs:
         with:
           path: ~/.platformio
           key: pio-${{ hashFiles('firmware/platformio.ini') }}
-      - run: pip install --only-binary :all: platformio==6.2.0
+      - run: 'pip install --only-binary :all: platformio==6.2.0'
       # Segredos fictícios só para compilar (os reais nunca entram no Git)
       - run: cp include/secrets.example.h include/secrets.h
       - run: pio test -e native
