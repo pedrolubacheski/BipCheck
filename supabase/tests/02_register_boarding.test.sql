@@ -1,7 +1,7 @@
 -- Função register_boarding (chamada pela Edge Function a cada bip) e tokens dos leitores
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(18);
 
 create function pg_temp.login_as(p_user uuid) returns void language plpgsql as $$
 begin
@@ -58,11 +58,47 @@ update public.cards set active = false where uid = 'A1B2C3D4';
 select pg_temp.wait_rate_limit();
 select is(pg_temp.status((select token from device), 'A1B2C3D4'), 'unknown_card', 'cartão desativado é recusado');
 
+-- Leituras guardadas sem rede e reenviadas depois (p_read_at)
+insert into public.students (id, company_id, name) values
+  ('a3000000-0000-0000-0000-000000000002', 'a1000000-0000-0000-0000-000000000000', 'Aluna Fictícia');
+insert into public.cards (company_id, student_id, uid) values
+  ('a1000000-0000-0000-0000-000000000000', 'a3000000-0000-0000-0000-000000000002', 'B1B2B3B4');
+
+select pg_temp.wait_rate_limit();
+select is(
+  public.register_boarding((select token from device), 'B1B2B3B4', now() - interval '30 minutes') ->> 'status',
+  'registered', 'leitura reenviada é registrada'
+);
+select ok(
+  (select boarded_at < now() - interval '29 minutes' from public.boardings
+    where student_id = 'a3000000-0000-0000-0000-000000000002'),
+  'o embarque reenviado fica com o horário da leitura, não o do reenvio'
+);
+select pg_temp.wait_rate_limit();
+select is(
+  public.register_boarding((select token from device), 'B1B2B3B4', now() - interval '31 minutes') ->> 'status',
+  'duplicate', 'leitura reenviada a menos de 2 minutos de outra do mesmo aluno não duplica'
+);
+select pg_temp.wait_rate_limit();
+select is(
+  public.register_boarding((select token from device), 'B1B2B3B4', now() - interval '13 hours') ->> 'status',
+  'invalid_read_at', 'leitura com mais de 12 horas é recusada'
+);
+select pg_temp.wait_rate_limit();
+select is(
+  public.register_boarding((select token from device), 'B1B2B3B4', now() + interval '10 minutes') ->> 'status',
+  'invalid_read_at', 'leitura com horário no futuro é recusada'
+);
+select is(
+  (select count(*)::int from public.boardings where student_id = 'a3000000-0000-0000-0000-000000000002'),
+  1, 'as leituras recusadas não gravaram embarque'
+);
+
 update public.devices set van_id = null;
 select pg_temp.wait_rate_limit();
 select is(pg_temp.status((select token from device), 'A1B2C3D4'), 'device_unassigned', 'leitor sem van não registra');
 
-select is((select count(*)::int from public.boardings), 1, 'só um embarque foi gravado');
+select is((select count(*)::int from public.boardings), 2, 'só os dois embarques válidos foram gravados');
 
 -- Troca de token: o antigo para de funcionar na hora
 select pg_temp.login_as('a0000000-0000-0000-0000-000000000001');

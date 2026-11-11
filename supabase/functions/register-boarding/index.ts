@@ -15,10 +15,12 @@ const supabase = createClient(
 
 const handler = createHandler({
   ipRateLimiter: createRateLimiter({ limit: 30, windowMs: 10_000 }),
-  registerBoarding: async (deviceToken, uid) => {
+  registerBoarding: async (deviceToken, uid, readAt) => {
     const { data, error } = await supabase.rpc('register_boarding', {
       p_device_token: deviceToken,
       p_uid: uid,
+      // Só vai quando o leitor mandou: leitura feita na hora usa o relógio do banco
+      ...(readAt ? { p_read_at: readAt } : {}),
     });
     if (error) throw new Error(error.message);
     return (data as { status: BoardingStatus }).status;

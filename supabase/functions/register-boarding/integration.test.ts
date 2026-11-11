@@ -94,3 +94,35 @@ Deno.test({
     await response.body?.cancel();
   },
 });
+
+Deno.test({
+  name: 'leitura reenviada grava o embarque com o horário em que o cartão foi lido',
+  ignore,
+  async fn() {
+    const { owner, token, uid } = await createFixture();
+    const readAt = new Date(Date.now() - 10 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+    const response = await callFunction({ device_token: token, uid, read_at: readAt });
+
+    assertEquals(response.status, 200);
+    const { data: boardings } = await owner.from('boardings').select('boarded_at');
+    assertEquals(boardings?.length, 1);
+    assertEquals(new Date(boardings![0].boarded_at).getTime(), new Date(readAt).getTime());
+  },
+});
+
+Deno.test({
+  name: 'leitura com mais de 12 horas é recusada e não grava embarque',
+  ignore,
+  async fn() {
+    const { owner, token, uid } = await createFixture();
+    const readAt = new Date(Date.now() - 13 * 60 * 60 * 1000).toISOString();
+
+    const response = await callFunction({ device_token: token, uid, read_at: readAt });
+
+    assertEquals(response.status, 422);
+    assertEquals(await response.json(), { status: 'invalid_read_at' });
+    const { data: boardings } = await owner.from('boardings').select('id');
+    assertEquals(boardings?.length, 0);
+  },
+});

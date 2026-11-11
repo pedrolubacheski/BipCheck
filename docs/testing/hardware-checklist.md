@@ -16,8 +16,11 @@ Faça este roteiro sempre que mexer no firmware, antes de abrir o PR. A CI não 
 | 5 | Encostar o cartão não cadastrado | Bip curtinho + **3 bips curtos**; o cartão aparece em "Cartões lidos e não cadastrados" | |
 | 6 | Trocar o token do leitor no app e encostar um cartão | 3 bips curtos (HTTP 401) | |
 | 7 | Tirar o leitor da van no app e encostar um cartão | 3 bips curtos (HTTP 409) | |
-| 8 | Desligar o Wi-Fi (hotspot) e encostar um cartão | Bip curtinho; 3 bips curtos depois de até ~20 s; a leitura de outros cartões **não trava** | |
-| 9 | Religar o Wi-Fi e encostar um cartão | Reconecta sozinho; 1 bip longo | |
-| 10 | Encostar 5 cartões seguidos rapidamente | Todos recebem o bip curtinho na hora e o resultado depois, em ordem | |
+| 8 | Desligar o Wi-Fi (hotspot) e encostar o cartão cadastrado | Bip curtinho e logo depois **2 bips longos** (leitura guardada); Serial mostra "Sem rede: leitura guardada (1 na fila)"; nada aparece no app | |
+| 9 | Ainda sem Wi-Fi, encostar outros cartões | Cada um recebe 2 bips longos na hora; a leitura **não trava** esperando a rede | |
+| 10 | Ainda sem Wi-Fi, desligar e religar o leitor (tirar o USB) | Serial mostra "Fila offline carregada da flash: N leitura(s)" | |
+| 11 | Religar o Wi-Fi e esperar | Reconecta sozinho; Serial mostra "Leitura offline reenviada: HTTP 200" para cada uma (uma a cada ~1,2 s); os embarques aparecem no app **com o horário em que o cartão foi encostado**; o cartão não cadastrado é reenviado com HTTP 404 e aparece em "Cartões lidos e não cadastrados" | |
+| 12 | Com o Wi-Fi de volta, encostar um cartão | Bip curtinho + 1 bip longo | |
+| 13 | Encostar 5 cartões seguidos rapidamente | Todos recebem o bip curtinho na hora e o resultado depois, em ordem (com mais de 1 por segundo, alguns podem dar 2 bips longos e ser enviados logo em seguida) | |
 
 **Tempos:** anote no PR o tempo do POST mostrado no Serial (`POST: HTTP 200 | XXX ms`). A meta é ficar abaixo de 1 s.

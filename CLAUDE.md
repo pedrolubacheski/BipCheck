@@ -123,12 +123,14 @@ docs/
   - `invalid_device`: token não reconhecido;
   - `device_unassigned`: leitor sem van;
   - `unknown_card`: cartão não cadastrado ou desativado;
+  - `invalid_read_at`: leitura reenviada com horário no futuro ou com mais de 12 horas;
   - `rate_limited`: mais de 1 requisição por segundo do mesmo leitor.
 
 ### Hardware
 - ESP32 DevKit WROOM-32 (USB CP2102; no Windows precisa do driver CP210x, aparece como COM3) + leitor RC522 (Mifare 13,56 MHz).
 - Pinos: SDA=GPIO21, RST=22, SCK=18, MISO=19, MOSI=23, alimentação 3V3. Buzzer ativo no GPIO 26. Sem LED e sem case por enquanto.
-- Sons: 1 bip curtinho = cartão lido; 1 bip longo = embarque registrado; 3 bips curtos = erro.
+- Sons: 1 bip curtinho = cartão lido; 1 bip longo = embarque registrado; 2 bips longos = sem rede, leitura guardada; 3 bips curtos = erro.
+- Fila offline (regra local, exigência do trabalho de IoT): sem rede, o leitor guarda até 50 leituras na flash (NVS) com o horário e reenvia quando a rede volta, mandando `read_at`. É a única parte de "offline" dentro do escopo; o app continua sem modo offline.
 - Wi-Fi precisa ser 2,4 GHz (hoje pelo hotspot do celular).
 
 ---

@@ -36,6 +36,27 @@ sequenceDiagram
     App-->>App: mostra o aluno e toca o bip
 ```
 
+## Um embarque sem rede (regra local do leitor)
+
+```mermaid
+sequenceDiagram
+    actor Aluno
+    participant ESP as ESP32
+    participant Fn as Edge Function
+    participant DB as Banco (register_boarding)
+
+    Aluno->>ESP: encosta o cartão
+    ESP-->>Aluno: bip curtinho (cartão lido)
+    ESP->>ESP: sem Wi-Fi ou sem resposta: guarda UID + horário na flash
+    ESP-->>Aluno: 2 bips longos (guardado)
+    Note over ESP: a rede volta
+    ESP->>Fn: POST {device_token, uid, read_at}
+    Fn->>DB: register_boarding(token, uid, read_at)
+    DB-->>Fn: {status: registered}
+    Fn-->>ESP: 200
+    ESP->>ESP: tira a leitura da fila
+```
+
 ## Modelo de dados
 
 ```mermaid
@@ -99,6 +120,9 @@ flowchart TB
         results[(Fila de resultados)] --> buzzer[Toca o bip<br/>sem travar]
     end
     subgraph core0 [Núcleo 0: tarefa de rede]
-        queue --> wifi[Garante Wi-Fi] --> post[POST HTTPS<br/>certificado validado] --> results
+        queue --> online{Tem Wi-Fi e o<br/>servidor respondeu?}
+        online -- sim --> post[POST HTTPS<br/>certificado validado] --> results
+        online -- não --> offline[(Fila offline<br/>na flash, até 50)] --> results
+        offline -. rede voltou:<br/>reenvia com read_at .-> post
     end
 ```
