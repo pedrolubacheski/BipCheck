@@ -28,6 +28,33 @@ Modelo:
 
 ---
 
+## 2026-11-11: Fila offline de embarques no leitor
+**Autor:** Gabriel · **Área:** Firmware, Banco, Edge Function, Docs
+
+O trabalho final de IoT exige uma regra de decisão no próprio dispositivo que funcione sem internet (requisito R2). Até aqui, sem Wi-Fi o leitor dava 3 bips de erro e a leitura se perdia. Agora o leitor decide sozinho o que fazer com a leitura quando a rede falha. É uma exceção consciente ao "modo offline fora da v1": vale só para o leitor.
+
+### Adicionado
+- **Firmware:**
+  - sem Wi-Fi, servidor fora do ar ou limite de requisições, a leitura vai para uma fila gravada na flash (NVS), com até 50 leituras, que sobrevive a um reinício do ESP32;
+  - **2 bips longos** avisam que a leitura foi guardada; fila cheia dá os 3 bips de erro;
+  - quando a rede volta, as leituras são reenviadas sozinhas, uma a cada 1,2 s (o servidor aceita 1 por segundo por leitor);
+  - relógio ajustado por NTP: a leitura reenviada leva `read_at` com o horário em que o cartão foi encostado.
+- **Banco:** `register_boarding` aceita `p_read_at` (opcional) e grava o embarque com esse horário. Horário no futuro ou com mais de 12 horas devolve o status novo `invalid_read_at`.
+- **Edge Function:** valida `read_at` com Zod e responde HTTP 422 para `invalid_read_at`.
+- Testes: fila, horário e bips (Unity), `read_at` na função (Deno) e no banco (pgTAP).
+
+### Alterado
+- O leitor não espera mais o Wi-Fi conectar (antes travava a tarefa de rede por até 20 s): sem rede, a decisão é imediata.
+- Toque repetido passa a comparar com o horário da leitura, não com o horário do envio.
+- Recusa definitiva do servidor (cartão desconhecido, token inválido) não é reenviada; só falha de rede, 429 e 5xx.
+
+### Pendente
+- Aplicar a migração `20261111120000_register_boarding_read_at.sql` e publicar a Edge Function no Supabase remoto (depois da CI verde e com aprovação). O firmware novo funciona com o servidor antigo, mas o embarque reenviado fica com o horário do envio até lá.
+- Rodar o roteiro `docs/testing/hardware-checklist.md` no ESP32 (itens 8 a 12 são novos).
+- Leitura feita antes do primeiro ajuste do relógio (leitor ligado já sem rede) é reenviada sem `read_at` e fica com o horário do envio.
+
+---
+
 ## 2026-10-31: Primeira validação ponta a ponta
 **Autor:** Gabriel · **Área:** Docs
 

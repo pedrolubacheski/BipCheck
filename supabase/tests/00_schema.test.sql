@@ -38,8 +38,8 @@ select is(
 );
 
 select ok(
-  not has_function_privilege('authenticated', 'public.register_boarding(text, text)', 'execute')
-    and not has_function_privilege('anon', 'public.register_boarding(text, text)', 'execute'),
+  not has_function_privilege('authenticated', 'public.register_boarding(text, text, timestamptz)', 'execute')
+    and not has_function_privilege('anon', 'public.register_boarding(text, text, timestamptz)', 'execute'),
   'register_boarding só pode ser chamada pela service_role'
 );
 

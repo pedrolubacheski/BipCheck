@@ -91,6 +91,7 @@ pio test -e native       # testes da lógica pura, no PC
 **Sons:**
 - 1 bip curtinho: cartão lido;
 - 1 bip longo: embarque registrado;
+- 2 bips longos: sem rede, leitura guardada no leitor (até 50) e enviada sozinha quando a rede voltar;
 - 3 bips curtos: erro.
 
 Roteiro de teste do leitor: [docs/testing/hardware-checklist.md](docs/testing/hardware-checklist.md).

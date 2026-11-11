@@ -6,12 +6,12 @@ const VALID_TOKEN = 'a'.repeat(48);
 const VALID_UID = 'A1B2C3D4';
 
 function setup(options: { status?: BoardingStatus; fails?: boolean; ipLimit?: number } = {}) {
-  const calls: Array<{ deviceToken: string; uid: string }> = [];
+  const calls: Array<{ deviceToken: string; uid: string; readAt?: string }> = [];
   const logs: Array<Record<string, unknown>> = [];
   const handler = createHandler({
     ipRateLimiter: createRateLimiter({ limit: options.ipLimit ?? 100, windowMs: 10_000 }),
-    registerBoarding: (deviceToken, uid) => {
-      calls.push({ deviceToken, uid });
+    registerBoarding: (deviceToken, uid, readAt) => {
+      calls.push({ deviceToken, uid, readAt });
       if (options.fails) return Promise.reject(new Error('banco fora do ar'));
       return Promise.resolve(options.status ?? 'registered');
     },
@@ -35,7 +35,7 @@ Deno.test('registra o embarque e responde 200 com o status', async () => {
 
   assertEquals(response.status, 200);
   assertEquals(await response.json(), { status: 'registered' });
-  assertEquals(calls, [{ deviceToken: VALID_TOKEN, uid: VALID_UID }]);
+  assertEquals(calls, [{ deviceToken: VALID_TOKEN, uid: VALID_UID, readAt: undefined }]);
 });
 
 Deno.test('toque repetido também responde 200 (o leitor dá bip de sucesso)', async () => {
@@ -47,11 +47,24 @@ Deno.test('toque repetido também responde 200 (o leitor dá bip de sucesso)', a
   assertEquals(await response.json(), { status: 'duplicate' });
 });
 
+Deno.test('leitura reenviada repassa ao banco o horário em que o cartão foi lido', async () => {
+  const { handler, calls } = setup();
+  const readAt = '2026-11-11T00:07:57Z';
+
+  const response = await handler(
+    post({ device_token: VALID_TOKEN, uid: VALID_UID, read_at: readAt }),
+  );
+
+  assertEquals(response.status, 200);
+  assertEquals(calls, [{ deviceToken: VALID_TOKEN, uid: VALID_UID, readAt }]);
+});
+
 Deno.test('converte cada recusa do banco no código HTTP certo', async () => {
   const expected: Array<[BoardingStatus, number]> = [
     ['invalid_device', 401],
     ['unknown_card', 404],
     ['device_unassigned', 409],
+    ['invalid_read_at', 422],
     ['rate_limited', 429],
   ];
   for (const [status, httpStatus] of expected) {
@@ -81,6 +94,8 @@ Deno.test('recusa corpo inválido sem chamar o banco', async () => {
     { device_token: 'curto', uid: VALID_UID },
     { device_token: VALID_TOKEN, uid: 'XYZ!' },
     { device_token: VALID_TOKEN, uid: VALID_UID, extra: 'campo a mais' },
+    { device_token: VALID_TOKEN, uid: VALID_UID, read_at: 'ontem' },
+    { device_token: VALID_TOKEN, uid: VALID_UID, read_at: 1794355677 },
   ];
   for (const body of invalidBodies) {
     const { handler, calls } = setup();

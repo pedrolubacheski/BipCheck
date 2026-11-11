@@ -13,8 +13,9 @@ class ApiClient {
   void begin();
   // Abre a conexão antes da primeira leitura (um GET não grava nada: a função responde 405)
   void warmUp();
-  // Retorna o código HTTP (200 = sucesso) ou um valor negativo em falha de rede
-  int postBoarding(const std::string& uid);
+  // Retorna o código HTTP (200 = sucesso) ou um valor negativo em falha de rede.
+  // readAtEpoch > 0: leitura guardada sem rede, enviada com o horário em que o cartão foi lido.
+  int postBoarding(const std::string& uid, uint32_t readAtEpoch = 0);
 
  private:
   void prepareRequest();

@@ -26,8 +26,8 @@ void ApiClient::warmUp() {
   Serial.printf("Conexão aquecida: HTTP %d | %lu ms\n", status, static_cast<unsigned long>(millis() - startedAt));
 }
 
-int ApiClient::postBoarding(const std::string& uid) {
-  const String body = bipcheck::buildBoardingPayload(DEVICE_TOKEN, uid).c_str();
+int ApiClient::postBoarding(const std::string& uid, uint32_t readAtEpoch) {
+  const String body = bipcheck::buildBoardingPayload(DEVICE_TOKEN, uid, readAtEpoch).c_str();
   const uint32_t startedAt = millis();
   int status = -1;
 

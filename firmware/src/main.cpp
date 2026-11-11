@@ -2,7 +2,10 @@
 //
 // Duas tarefas, para a leitura do cartão nunca travar esperando a rede:
 //   loop() (núcleo 1): lê cartões, toca o buzzer e coloca o UID na fila
-//   networkTask (núcleo 0): mantém o Wi-Fi, envia cada UID da fila e devolve o código HTTP
+//   networkTask (núcleo 0): envia cada UID da fila e devolve o resultado para o bip
+//
+// Regra local (funciona sem internet): se o envio falhar por falta de rede, a leitura é guardada
+// na flash com o horário (fila offline), o leitor dá 2 bips longos e reenvia quando a rede voltar.
 //
 // Antes de compilar: copie include/secrets.example.h para include/secrets.h e preencha.
 
@@ -17,6 +20,9 @@
 #include "card_reader.h"
 #include "config.h"
 #include "feedback.h"
+#include "offline_queue.h"
+#include "offline_store.h"
+#include "timestamp.h"
 #include "wifi_connection.h"
 
 namespace {
@@ -26,12 +32,17 @@ struct CardRead {
 };
 
 QueueHandle_t cardQueue;
-QueueHandle_t resultQueue;  // códigos HTTP (int)
+QueueHandle_t resultQueue;  // bipcheck::Feedback de cada leitura
 
 CardReader reader;
 Buzzer buzzer(PIN_BUZZER);
 ApiClient api;
 bipcheck::CardDebouncer debouncer(SAME_CARD_DEBOUNCE_MS);
+
+// Usados só pela tarefa de rede
+bipcheck::OfflineQueue offlineQueue(OFFLINE_QUEUE_CAPACITY);
+OfflineStore offlineStore;
+uint32_t lastPostAtMs = 0;
 
 // Motivo do último reinício, para diagnosticar reinícios sozinhos
 const char* resetReason() {
@@ -49,19 +60,77 @@ const char* resetReason() {
   }
 }
 
-void networkTask(void*) {
-  wifiBegin();
-  if (wifiEnsureConnected()) {
-    api.warmUp();
+int postBoarding(const std::string& uid, uint32_t readAtEpoch = 0) {
+  const int status = api.postBoarding(uid, readAtEpoch);
+  lastPostAtMs = millis();
+  return status;
+}
+
+// Leitura feita agora: tenta enviar; sem rede, guarda na fila offline. Devolve o bip a tocar.
+bipcheck::Feedback handleRead(const CardRead& card) {
+  // Sem Wi-Fi nem tenta enviar: a decisão é imediata, sem esperar a rede
+  const int status = wifiIsConnected() ? postBoarding(card.uid) : -1;
+  const bipcheck::SendOutcome outcome = bipcheck::classifySend(status);
+
+  bool stored = false;
+  if (outcome == bipcheck::SendOutcome::Retry) {
+    const uint32_t now = clockNowEpoch();
+    stored = offlineQueue.push(card.uid, bipcheck::isClockSet(now) ? now : 0);
+    if (stored) {
+      offlineStore.save(offlineQueue);
+      Serial.printf("Sem rede: leitura guardada (%u na fila)\n", static_cast<unsigned>(offlineQueue.size()));
+    } else {
+      Serial.println("Sem rede e fila offline cheia: leitura perdida");
+    }
   }
+  return bipcheck::feedbackForRead(outcome, stored);
+}
+
+// Reenvia a leitura mais antiga da fila offline. true = saiu da fila (entregue ou recusada de vez).
+bool resendOldest() {
+  if (!wifiIsConnected()) {
+    wifiRetry();
+    return false;
+  }
+  const bipcheck::PendingBoarding& pending = offlineQueue.front();
+  const int status = postBoarding(pending.uid, pending.readAtEpoch);
+  if (bipcheck::classifySend(status) == bipcheck::SendOutcome::Retry) {
+    return false;
+  }
+  offlineQueue.pop();
+  offlineStore.save(offlineQueue);
+  Serial.printf("Leitura offline reenviada: HTTP %d (%u na fila)\n", status,
+                static_cast<unsigned>(offlineQueue.size()));
+  return true;
+}
+
+void networkTask(void*) {
+  offlineStore.load(offlineQueue);
+  if (!offlineQueue.empty()) {
+    Serial.printf("Fila offline carregada da flash: %u leitura(s)\n", static_cast<unsigned>(offlineQueue.size()));
+  }
+
+  wifiBegin();
+  bool warmedUp = false;
+  uint32_t resendWaitMs = OFFLINE_RESEND_INTERVAL_MS;
 
   CardRead card;
   for (;;) {
-    if (xQueueReceive(cardQueue, &card, portMAX_DELAY) != pdTRUE) {
+    // Com a fila offline vazia, dorme até chegar um cartão; com leituras pendentes, acorda para reenviar
+    const TickType_t wait = offlineQueue.empty() ? pdMS_TO_TICKS(1000) : pdMS_TO_TICKS(resendWaitMs);
+    if (xQueueReceive(cardQueue, &card, wait) == pdTRUE) {
+      const bipcheck::Feedback feedback = handleRead(card);
+      xQueueSend(resultQueue, &feedback, 0);
       continue;
     }
-    const int status = wifiEnsureConnected() ? api.postBoarding(card.uid) : -1;
-    xQueueSend(resultQueue, &status, 0);
+
+    if (!warmedUp && wifiIsConnected()) {
+      api.warmUp();
+      warmedUp = true;
+    }
+    if (!offlineQueue.empty() && millis() - lastPostAtMs >= OFFLINE_RESEND_INTERVAL_MS) {
+      resendWaitMs = resendOldest() ? OFFLINE_RESEND_INTERVAL_MS : OFFLINE_RETRY_INTERVAL_MS;
+    }
   }
 }
 
@@ -76,7 +145,7 @@ void setup() {
   api.begin();
 
   cardQueue = xQueueCreate(CARD_QUEUE_LENGTH, sizeof(CardRead));
-  resultQueue = xQueueCreate(CARD_QUEUE_LENGTH, sizeof(int));
+  resultQueue = xQueueCreate(CARD_QUEUE_LENGTH, sizeof(bipcheck::Feedback));
   // TLS precisa de pilha grande
   xTaskCreatePinnedToCore(networkTask, "network", 12288, nullptr, 1, nullptr, 0);
 
@@ -97,9 +166,9 @@ void loop() {
     }
   }
 
-  int status = 0;
-  if (xQueueReceive(resultQueue, &status, 0) == pdTRUE) {
-    buzzer.play(bipcheck::beepFor(bipcheck::feedbackForHttpStatus(status)));
+  bipcheck::Feedback feedback = bipcheck::Feedback::Error;
+  if (xQueueReceive(resultQueue, &feedback, 0) == pdTRUE) {
+    buzzer.play(bipcheck::beepFor(feedback));
   }
 
   buzzer.update();

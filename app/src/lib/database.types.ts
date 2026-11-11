@@ -402,7 +402,7 @@ export type Database = {
         }[];
       };
       register_boarding: {
-        Args: { p_device_token: string; p_uid: string };
+        Args: { p_device_token: string; p_read_at?: string; p_uid: string };
         Returns: Json;
       };
       rotate_device_token: { Args: { p_device_id: string }; Returns: string };
