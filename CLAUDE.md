@@ -2,7 +2,7 @@
 
 > Arquivo de memória do projeto. Coloque na raiz do repositório como `CLAUDE.md` (vale para toda a equipe)
 > ou como `CLAUDE.local.md` (só para você, e fica fora do Git).
-> Última atualização: 31/10/2026.
+> Última atualização: 10/11/2026.
 
 ---
 
@@ -24,7 +24,7 @@
 - Trabalhe sempre em **branch separada** e entregue por **Pull Request**. Nada direto na `main`.
 - **Ao fim de cada implementação, registre o que foi feito no `CHANGELOG.md`**, no mesmo PR, seguindo o modelo do topo do arquivo.
 - **Descrição do PR:** preencha sempre seguindo `.github/pull_request_template.md` (o `gh pr create --body` não aplica o modelo sozinho). Só marque um item do checklist se ele foi de fato verificado.
-- **Validar antes de construir.** O escopo da v1 é uma prova de conceito: ESP32 + Wi-Fi + RFID + PWA. Modo offline, escala e otimizações ficam **fora da v1**. Se uma tarefa puxar para fora disso, avise antes.
+- **Validar antes de construir.** O escopo da v1 é uma prova de conceito: ESP32 + Wi-Fi + RFID + PWA. Modo offline, escala e otimizações ficam **fora da v1** (única exceção: a fila offline do leitor, ver `docs/decisions/0002-offline-boarding-queue.md`). Se uma tarefa puxar para fora disso, avise antes.
 - **Separe sempre o que está Decidido do que é Hipótese** (ver seção 5). Não trate hipótese como requisito.
 - **LGPD e privacidade:** dados de alunos (nome, cidade, horário de embarque, futuramente localização) são dados pessoais. Coleta mínima, RLS em toda tabela, nada de dados reais em commits, prints ou seeds. Embarques ficam 3 meses e logs de auditoria 30 dias (seção 7.7). Menores de idade estão fora do MVP; se o assunto aparecer, trate com cuidado redobrado.
 - **A apresentação do evento (Start FAG) não pode ser gerada por IA.** O Claude pode ajudar com conteúdo, pesquisa e revisão, mas não montar os slides.
@@ -67,7 +67,7 @@
 - A Edge Function usa a `service_role` (só no servidor) e chama a RPC numa única ida ao banco.
 - O app usa só a **chave pública** do Supabase; quem protege os dados é a **RLS**.
 - Tempo do bip ao registro no protótipo: ~0,25 a 0,57 s (banco e função em `us-east-1`, o firmware manda `x-region: us-east-1`).
-- Diagramas: `docs/diagrams/architecture.md`. Decisão completa: `docs/decisions/0001-architecture.md`.
+- Diagramas: `docs/diagrams/architecture.md`. Decisões: `docs/decisions/0001-architecture.md` (arquitetura) e `docs/decisions/0002-offline-boarding-queue.md` (fila offline do leitor).
 
 ### Estrutura do repositório
 
@@ -135,20 +135,22 @@ docs/
 
 ---
 
-## 4. Estado atual (31/10/2026)
+## 4. Estado atual (10/11/2026)
 
 - ✅ Projeto reconstruído no padrão da seção 7 (branch `feat/dev-architecture`): banco multi-tenant, Edge Function `register-boarding`, firmware no PlatformIO, app completo (cadastros + embarques em tempo real), testes e CI.
 - ✅ Novo esquema aplicado no Supabase remoto e Edge Function `register-boarding` publicada (o esquema do protótipo saiu).
 - ✅ Firmware novo gravado no ESP32, conectando pelo Wi-Fi de casa.
 - ✅ **Primeira validação ponta a ponta (31/10/2026):** dono cadastrou empresa, van, motorista, aluno e leitor; o cartão desconhecido apareceu em "Cartões lidos e não cadastrados" (HTTP 404, 3 bips), foi vinculado ao aluno e o embarque seguinte apareceu sozinho no celular do motorista (HTTP 200, bip longo).
 - ✅ Reconstrução mergeada na `main` (PR #3).
-- ⏳ Falta no roteiro de hardware: toque repetido, leitor sem Wi-Fi e medir o tempo do bip até o registro (meta < 1 s).
+- ✅ **Fila offline do leitor (10/11/2026, PR #12):** na `main`, com a migração `read_at` aplicada no Supabase remoto e a Edge Function publicada. Feita para o requisito de decisão local do trabalho final de IoT (entrega até 23/11/2026).
+- ⏳ A fila offline **ainda não foi testada no ESP32**: falta rodar os itens 8 a 12 de `docs/testing/hardware-checklist.md`.
+- ⏳ Falta no roteiro de hardware: toque repetido e medir o tempo do bip até o registro (meta < 1 s).
 - ⚠️ A senha do Wi-Fi e o `device_token` do protótipo aparecem no histórico do Git. Ambos deixam de valer: o Wi-Fi era só de teste e o token antigo some com o esquema do protótipo.
 
 ### Fora da v1 / próximos passos conhecidos
 - Conceito de viagem (ida/volta) e exceções (aluno que vai numa van e volta em outra, aluno que só volta).
 - Tela de auditoria completa para o dono (hoje a auditoria aparece só em "Cartões lidos e não cadastrados").
-- Modo offline do leitor, hospedagem do PWA, MFA (antes do primeiro cliente real), testes E2E com Playwright.
+- Modo offline do app, lista local de cartões autorizados no leitor, hospedagem do PWA, MFA (antes do primeiro cliente real), testes E2E com Playwright.
 
 ---
 
