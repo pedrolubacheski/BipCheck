@@ -28,10 +28,10 @@ Modelo:
 
 ---
 
-## 2026-11-11: Fila offline de embarques no leitor
-**Autor:** Gabriel · **Área:** Firmware, Banco, Edge Function, Docs
+## 2026-11-10: Fila offline de embarques no leitor
+**Autor:** Gabriel · **PR:** #12 · **Área:** Firmware, Banco, Edge Function, Docs
 
-O trabalho final de IoT exige uma regra de decisão no próprio dispositivo que funcione sem internet (requisito R2). Até aqui, sem Wi-Fi o leitor dava 3 bips de erro e a leitura se perdia. Agora o leitor decide sozinho o que fazer com a leitura quando a rede falha. É uma exceção consciente ao "modo offline fora da v1": vale só para o leitor.
+O trabalho final de IoT exige uma regra de decisão no próprio dispositivo que funcione sem internet (requisito R2). Até aqui, sem Wi-Fi o leitor dava 3 bips de erro e a leitura se perdia. Agora o leitor decide sozinho o que fazer com a leitura quando a rede falha. É uma exceção consciente ao "modo offline fora da v1": vale só para o leitor. A decisão está registrada em `docs/decisions/0002-offline-boarding-queue.md`.
 
 ### Adicionado
 - **Firmware:**
@@ -48,8 +48,10 @@ O trabalho final de IoT exige uma regra de decisão no próprio dispositivo que 
 - Toque repetido passa a comparar com o horário da leitura, não com o horário do envio.
 - Recusa definitiva do servidor (cartão desconhecido, token inválido) não é reenviada; só falha de rede, 429 e 5xx.
 
+### Aplicado no Supabase
+- Em 10/11/2026, depois da CI verde: migração `20261111120000_register_boarding_read_at.sql` e Edge Function `register-boarding` (publicada pelo painel, ver a nota no `README.md`).
+
 ### Pendente
-- Aplicar a migração `20261111120000_register_boarding_read_at.sql` e publicar a Edge Function no Supabase remoto (depois da CI verde e com aprovação). O firmware novo funciona com o servidor antigo, mas o embarque reenviado fica com o horário do envio até lá.
 - Rodar o roteiro `docs/testing/hardware-checklist.md` no ESP32 (itens 8 a 12 são novos).
 - Leitura feita antes do primeiro ajuste do relógio (leitor ligado já sem rede) é reenviada sem `read_at` e fica com o horário do envio.
 

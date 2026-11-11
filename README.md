@@ -42,6 +42,7 @@ npx supabase functions deploy register-boarding --no-verify-jwt  # publica a Edg
 ```
 
 - O banco remoto só deve ser alterado depois de o PR passar na CI.
+- Prefira a CLI para publicar a Edge Function. O editor do painel do Supabase não lê o `deno.json`: lá os imports `@supabase/supabase-js` e `zod` precisam ser escritos como `npm:@supabase/supabase-js@<versão>` e `npm:zod@<versão>` (as versões estão no `deno.json`), senão o deploy falha com "Relative import path ... not prefixed".
 - Para criar uma migração nova: `npx supabase migration new nome_em_ingles`.
 - Depois de mudar o banco, regenere os tipos do app:
   ```
