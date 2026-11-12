@@ -29,7 +29,7 @@ Modelo:
 ---
 
 ## 2026-11-12: Redesenho do app pensando primeiro no celular
-**Autor:** Pedro · **PR:** (a abrir) · **Área:** App
+**Autor:** Pedro · **PR:** #14 · **Área:** App
 
 O app funcionava, mas tinha cara de tela de computador encolhida: letras e botões pequenos, menu que rolava para o lado e formulários ocupando o topo de toda tela. O usuário principal é um motorista de uns 50 anos, sem costume com aplicativos, que olha o celular com a van parada. A interface foi refeita a partir do celular. Nenhuma regra de negócio, tabela, RPC ou Edge Function mudou.
 
