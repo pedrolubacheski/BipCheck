@@ -28,6 +28,38 @@ Modelo:
 
 ---
 
+## 2026-11-12: Teste da fila offline no ESP32
+**Autor:** Gabriel · **Área:** Docs
+
+Roteiro `docs/testing/hardware-checklist.md` executado no ESP32 com o firmware da fila offline (PR #12), contra o Supabase remoto. O leitor estava no hotspot do notebook, e o Wi-Fi foi cortado desligando esse hotspot. Nenhum código mudou.
+
+### Validado
+- **Com rede (itens 1 a 5 e 12):**
+  - cartão cadastrado: 1 bip longo e o embarque aparece no app;
+  - mesmo cartão em menos de 3 s: ignorado pelo leitor;
+  - mesmo cartão em menos de 2 min: o servidor não grava um segundo embarque;
+  - cartão não cadastrado: HTTP 404 e o cartão aparece em "Cartões lidos e não cadastrados".
+- **Fila offline, o requisito R2 do trabalho de IoT (itens 8 a 11):**
+  - sem Wi-Fi, cada leitura vai para a fila na hora, com 2 bips longos, sem travar;
+  - com 3 leituras na fila, o leitor foi desligado (USB tirado) e, ao religar, carregou as 3 da flash;
+  - quando a rede volta, o leitor reconecta e reenvia tudo sozinho, em ordem;
+  - o embarque reenviado é gravado com o horário em que o cartão foi encostado, não com o do reenvio;
+  - o toque repetido é avaliado pelo horário da leitura: duas leituras offline a menos de 2 min do último embarque foram tratadas como repetidas, embora reenviadas mais de 3 min depois;
+  - cartão encostado logo depois de a rede cair, com o leitor ainda achando que estava conectado: o envio falhou (DNS) em 0,6 s e a leitura foi para a fila.
+- **Rajada (item 13):** 5 toques seguidos, alternando dois cartões, todos processados em ordem e nenhum perdido.
+
+### Tempos medidos (POST, do Serial)
+- Conexão HTTPS já aberta: de 530 a 890 ms, dentro da meta de < 1 s.
+- Primeira leitura depois de 30 s ou mais parado: de 1030 a 1475 ms, fora da meta. O servidor fecha a conexão ociosa e o leitor precisa abrir outra.
+- Primeira leitura depois de o Wi-Fi voltar: ~4,9 s. O leitor só aquece a conexão HTTPS no boot, não depois de reconectar.
+
+### Pendente
+- Itens 6 (token trocado) e 7 (leitor sem van) do roteiro.
+- Decidir se vale manter a conexão aberta enquanto o leitor está parado (chamada leve a cada ~40 s) e aquecê-la de novo depois de reconectar. Sem isso, o primeiro aluno de cada parada fica acima de 1 s.
+- O leitor levou ~45 s para reconectar depois de o hotspot voltar. Pode ser só o tempo de o hotspot subir; observar nos próximos testes.
+
+---
+
 ## 2026-11-10: Fila offline de embarques no leitor
 **Autor:** Gabriel · **PR:** #12 · **Área:** Firmware, Banco, Edge Function, Docs
 
