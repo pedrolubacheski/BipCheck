@@ -1,5 +1,110 @@
 @import 'tailwindcss';
 
-body {
-  font-family: system-ui, sans-serif;
+/* Base pensada para o celular: texto grande, bom contraste e foco sempre visível */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    font-family:
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      Roboto,
+      sans-serif;
+    @apply bg-slate-100 text-lg text-slate-900 antialiased;
+  }
+
+  :focus-visible {
+    @apply outline-3 outline-offset-2 outline-emerald-600;
+  }
+
+  /* Seta própria no lugar do marcador padrão do <details> */
+  summary {
+    @apply cursor-pointer list-none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+/* Animações curtas, só com transform e opacity (leves até em celular simples) */
+
+/* Conteúdo que entra na tela: sobe um pouco e aparece */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@utility animate-rise {
+  animation: rise 0.25s ease-out both;
+}
+
+/* Embarque que acabou de chegar: desce no lugar com um brilho verde */
+@keyframes arrive {
+  from {
+    background-color: var(--color-emerald-300);
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@utility animate-arrive {
+  animation: arrive 0.6s ease-out both;
+}
+
+/* Contador que mudou: um pequeno "pulo" */
+@keyframes pop {
+  from {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+}
+
+@utility animate-pop {
+  animation: pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+/* Confirmação: sobe de baixo no celular e aparece suave nas telas maiores */
+dialog[open] {
+  animation: sheet 0.25s ease-out;
+}
+dialog[open]::backdrop {
+  animation: fade 0.25s ease-out;
+}
+@media (width >= 40rem) {
+  dialog[open] {
+    animation: rise 0.2s ease-out;
+  }
+}
+
+/* Detalhes do aluno ao abrir */
+details[open] > summary ~ * {
+  animation: rise 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

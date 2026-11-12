@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
-import { useRequiredUser } from '@/features/auth/index.ts';
+import { SignOutButton, useRequiredUser } from '@/features/auth/index.ts';
 import { ErrorMessage, LoadingMessage } from '@/shared/components/Feedback.tsx';
 import { useAsyncData } from '@/shared/hooks/useAsyncData.ts';
 import { CompanyContext, type CompanyState } from './CompanyContext.ts';
@@ -29,12 +29,24 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     };
   }, [memberships, selectedId, reload]);
 
-  if (loading && !memberships) return <LoadingMessage />;
-  if (error) return <ErrorMessage error={error} />;
+  if (loading && !memberships) return <LoadingMessage fullScreen />;
+  if (error) {
+    return (
+      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 px-4 py-8">
+        <h1 className="text-2xl font-bold">Não foi possível abrir o BipCheck</h1>
+        <ErrorMessage error={error} onRetry={reload} />
+        <SignOutButton className="justify-center border-2 border-slate-400 bg-white text-slate-900" />
+      </main>
+    );
+  }
 
   return (
     <CompanyContext value={state}>
-      {state.current ? children : <CreateCompanyPage onCreated={reload} />}
+      {state.current ? (
+        children
+      ) : (
+        <CreateCompanyPage email={user.email} checking={loading} onChanged={reload} />
+      )}
     </CompanyContext>
   );
 }

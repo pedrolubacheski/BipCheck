@@ -1,4 +1,4 @@
-import { startOfToday } from './dates.ts';
+import { formatLongDate, startOfToday } from './dates.ts';
 
 describe('startOfToday', () => {
   it('volta para a meia-noite do mesmo dia', () => {
@@ -14,5 +14,11 @@ describe('startOfToday', () => {
     expect(startOfToday()).toEqual(new Date(2026, 0, 15));
 
     vi.useRealTimers();
+  });
+});
+
+describe('formatLongDate', () => {
+  it('escreve o dia da semana, o dia e o mês por extenso', () => {
+    expect(formatLongDate(new Date(2026, 10, 12))).toBe('quinta-feira, 12 de novembro');
   });
 });

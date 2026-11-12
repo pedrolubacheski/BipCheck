@@ -11,3 +11,8 @@ export function formatTime(iso: string): string {
 export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
+
+// Ex.: "quinta-feira, 12 de novembro"
+export function formatLongDate(date: Date = new Date()): string {
+  return date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+}

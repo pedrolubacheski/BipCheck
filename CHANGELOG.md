@@ -28,6 +28,36 @@ Modelo:
 
 ---
 
+## 2026-11-12: Redesenho do app pensando primeiro no celular
+**Autor:** Pedro · **PR:** (a abrir) · **Área:** App
+
+O app funcionava, mas tinha cara de tela de computador encolhida: letras e botões pequenos, menu que rolava para o lado e formulários ocupando o topo de toda tela. O usuário principal é um motorista de uns 50 anos, sem costume com aplicativos, que olha o celular com a van parada. A interface foi refeita a partir do celular. Nenhuma regra de negócio, tabela, RPC ou Edge Function mudou.
+
+### Alterado
+- **Base visual:** texto de 18 px, botões de 56 px (48 px nos secundários), campos com borda forte, contraste alto e foco sempre visível. Ícones são sempre acompanhados de texto e a cor nunca é a única informação (etiquetas dizem "Ativo", "Sem cartão", "Novo").
+- **Acabamento:** sombras suaves nos cartões, botões, cabeçalho e barra de navegação, e animações curtas (tela entrando ao trocar de aba, confirmação subindo de baixo, botão que afunda ao toque, contador que "pula" quando muda, ponto pulsando no "Ao vivo"). Todas usam só `transform` e `opacity`, sem biblioteca.
+- **Navegação:** o dono ganhou uma barra fixa embaixo no celular (ícone + nome) e um menu lateral em tablet e computador. O motorista não tem menu: usa uma tela só.
+- **Embarques (tela do motorista):** contador grande de quantos embarcaram, nome da van, lista com nomes e horários maiores e o embarque que acabou de chegar destacado com a etiqueta "Novo". A tela diz se a atualização ao vivo está ligada e tem o botão "Atualizar".
+- **Cadastros do dono (Alunos, Vans, Leitores, Equipe):** o formulário de cadastro fica atrás de um botão (aberto sozinho quando a lista está vazia), cada aluno abre e fecha, e a lista de alunos tem busca por nome a partir de 8 alunos.
+- **Ligar cartão ao aluno e motorista à van:** agora é escolher e confirmar no botão. Antes a ação disparava só de mexer na lista de escolha.
+- **Login:** botão "Mostrar" a senha, dica de tamanho da senha ao criar conta e botões grandes para trocar entre entrar e criar conta.
+- **Primeiro acesso sem empresa:** dois caminhos separados ("Sou motorista" mostra o e-mail que o dono precisa adicionar; "Sou dono da frota" cria a empresa) e botão "Sair", que não existia nessa tela.
+
+### Adicionado
+- Confirmação própria (no lugar do `confirm()` do navegador) antes de apagar, remover, gerar código novo do leitor e sair. O foco começa em "Cancelar".
+- Aviso rápido de sucesso depois de cada ação ("Aluno cadastrado.", "Cartão ligado ao aluno.").
+- Aviso de "Sem internet" no topo e botão "Tentar de novo" nos erros de carregamento.
+- A lista de embarques é buscada de novo quando a internet volta, quando o celular sai da espera e quando a conexão ao vivo cai e volta (antes, embarques desse intervalo só apareciam recarregando a página).
+- As animações são desligadas quando o aparelho está com a opção "reduzir movimento".
+- Testes: confirmação, botão em andamento, busca de alunos, destaque do embarque novo e recarga da lista quando a conexão volta.
+
+### Pendente
+- Testar com um motorista de verdade (o critério de sucesso é ele usar sem ajuda) e no celular físico: até aqui a conferência visual foi por capturas em 360, 390, 430, 768 e 1280 px com dados fictícios.
+- Medir com o Lighthouse antes da entrega (seção 7.8).
+- O bip do celular depende de um toque na tela antes (regra dos navegadores); não mudou.
+
+---
+
 ## 2026-11-10: Fila offline de embarques no leitor
 **Autor:** Gabriel · **PR:** #12 · **Área:** Firmware, Banco, Edge Function, Docs
 

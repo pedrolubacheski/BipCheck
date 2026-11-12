@@ -6,7 +6,7 @@ import { LoadingMessage } from '@/shared/components/Feedback.tsx';
 
 export function RequireAuth() {
   const { user, loading } = useAuth();
-  if (loading) return <LoadingMessage />;
+  if (loading) return <LoadingMessage fullScreen />;
   if (!user) return <LoginPage />;
   return (
     <CompanyProvider>
