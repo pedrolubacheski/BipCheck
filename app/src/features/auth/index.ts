@@ -2,4 +2,4 @@
 export { useAuth, useRequiredUser } from './AuthContext.ts';
 export { AuthProvider } from './AuthProvider.tsx';
 export { LoginPage } from './LoginPage.tsx';
-export { signOut } from './services/authService.ts';
+export { SignOutButton } from './components/SignOutButton.tsx';

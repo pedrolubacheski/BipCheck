@@ -1,13 +1,18 @@
 import { type FormEvent, useCallback, useState } from 'react';
 import { useCurrentCompany } from '@/features/companies/index.ts';
-import { formatDateTime } from '@/shared/dates.ts';
+import { Badge } from '@/shared/components/Badge.tsx';
 import { Button } from '@/shared/components/Button.tsx';
+import { type Confirmation, ConfirmDialog } from '@/shared/components/ConfirmDialog.tsx';
 import { EmptyMessage, ErrorMessage, LoadingMessage } from '@/shared/components/Feedback.tsx';
+import { IconCard, IconChevronDown, IconPlus, IconStudents } from '@/shared/components/icons.tsx';
 import { PageTitle, Panel } from '@/shared/components/Panel.tsx';
 import { SelectField } from '@/shared/components/SelectField.tsx';
 import { TextField } from '@/shared/components/TextField.tsx';
+import { formatDateTime } from '@/shared/dates.ts';
 import { useAsyncData } from '@/shared/hooks/useAsyncData.ts';
 import { useSubmit } from '@/shared/hooks/useSubmit.ts';
+import { useToast } from '@/shared/toast/ToastContext.ts';
+import { searchStudents } from './searchStudents.ts';
 import {
   addCard,
   createStudent,
@@ -17,91 +22,204 @@ import {
   listUnknownCards,
   setCardActive,
 } from './services/studentService.ts';
-import type { Student } from './types.ts';
+import type { Student, UnknownCard } from './types.ts';
 
-function StudentCard({
-  student,
+// A partir desta quantidade, a lista ganha o campo de procurar
+const SEARCH_FROM = 8;
+
+type Run = (action: () => Promise<void>, successMessage: string) => Promise<boolean>;
+
+function cardSummary(student: Student): { label: string; tone: 'success' | 'warning' } {
+  const active = student.cards.filter((card) => card.active).length;
+  if (student.cards.length === 0) return { label: 'Sem cartão', tone: 'warning' };
+  if (active === 0) return { label: 'Cartão desativado', tone: 'warning' };
+  return { label: active === 1 ? '1 cartão' : `${active} cartões`, tone: 'success' };
+}
+
+// Cartão encostado no leitor que ainda não é de ninguém: escolher o aluno e confirmar
+function UnknownCardItem({
+  card,
+  students,
   busy,
-  onAddCard,
-  onRun,
+  onLink,
 }: {
-  student: Student;
+  card: UnknownCard;
+  students: Student[];
   busy: boolean;
-  onAddCard: (studentId: string, uid: string) => Promise<boolean>;
-  onRun: (action: () => Promise<void>) => void;
+  onLink: (studentId: string) => void;
 }) {
-  const [uid, setUid] = useState('');
+  const [studentId, setStudentId] = useState('');
 
-  async function handleAddCard(event: FormEvent) {
+  function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (await onAddCard(student.id, uid)) setUid('');
+    onLink(studentId);
   }
 
   return (
-    <Panel title={student.name}>
-      {student.city && <p className="-mt-2 mb-2 text-sm text-slate-500">{student.city}</p>}
-      <h3 className="text-sm font-medium text-slate-700">Cartões</h3>
-      {student.cards.length === 0 && <p className="text-sm text-slate-500">Nenhum cartão.</p>}
-      <ul className="mb-3 divide-y divide-slate-100">
-        {student.cards.map((card) => (
-          <li key={card.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-            <span className={`font-mono ${card.active ? '' : 'text-slate-400 line-through'}`}>
-              {card.uid}
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                disabled={busy}
-                onClick={() => onRun(() => setCardActive(card.id, !card.active))}
-              >
-                {card.active ? 'Desativar' : 'Ativar'}
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={busy}
-                onClick={() => onRun(() => deleteCard(card.id))}
-              >
-                Remover
-              </Button>
-            </div>
-          </li>
-        ))}
-      </ul>
-      <form onSubmit={handleAddCard} className="flex items-end gap-2">
-        <TextField
-          label="UID do cartão"
-          placeholder="Ex.: A1B2C3D4"
-          className="flex-1"
+    <li className="py-4 first:pt-0 last:pb-0">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="flex items-center gap-2 font-mono text-lg font-semibold">
+            <IconCard className="size-5" />
+            {card.uid}
+          </span>
+          <span className="text-base text-slate-700">
+            lido em {formatDateTime(card.lastSeenAt)}
+          </span>
+        </p>
+        <SelectField
+          label="De qual aluno é este cartão?"
           required
-          value={uid}
-          onChange={(e) => setUid(e.target.value)}
-        />
-        <Button type="submit" disabled={busy}>
-          Adicionar
+          value={studentId}
+          onChange={(e) => setStudentId(e.target.value)}
+        >
+          <option value="">Escolha o aluno</option>
+          {students.map((student) => (
+            <option key={student.id} value={student.id}>
+              {student.name}
+            </option>
+          ))}
+        </SelectField>
+        <Button type="submit" size="md" disabled={busy}>
+          Ligar cartão ao aluno
         </Button>
       </form>
-      <Button
-        variant="danger"
-        className="mt-3"
-        disabled={busy}
-        onClick={() => {
-          if (
-            confirm(
-              `Apagar ${student.name}? Os cartões e embarques do aluno também serão apagados.`,
-            )
-          ) {
-            onRun(() => deleteStudent(student.id));
-          }
-        }}
-      >
-        Apagar aluno
-      </Button>
-    </Panel>
+    </li>
+  );
+}
+
+// Cada aluno abre e fecha: a lista fica curta e os detalhes aparecem só quando pedidos
+function StudentItem({
+  student,
+  companyId,
+  busy,
+  run,
+  onConfirm,
+}: {
+  student: Student;
+  companyId: string;
+  busy: boolean;
+  run: Run;
+  onConfirm: (confirmation: Confirmation) => void;
+}) {
+  const [uid, setUid] = useState('');
+  const summary = cardSummary(student);
+
+  async function handleAddCard(event: FormEvent) {
+    event.preventDefault();
+    if (await run(() => addCard(companyId, student.id, uid), 'Cartão adicionado.')) setUid('');
+  }
+
+  return (
+    <li>
+      <details className="group">
+        <summary className="flex min-h-16 items-center justify-between gap-3 py-3">
+          <span className="min-w-0">
+            <span className="block text-xl font-semibold break-words">{student.name}</span>
+            {student.city && <span className="block text-base text-slate-700">{student.city}</span>}
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
+            <Badge tone={summary.tone}>{summary.label}</Badge>
+            <IconChevronDown className="size-6 text-slate-700 transition-transform group-open:rotate-180" />
+          </span>
+        </summary>
+
+        <div className="flex flex-col gap-4 pb-5">
+          {student.cards.length > 0 && (
+            <ul className="flex flex-col gap-3">
+              {student.cards.map((card) => (
+                <li
+                  key={card.id}
+                  className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3"
+                >
+                  <p className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 font-mono text-lg font-semibold">
+                      <IconCard className="size-5" />
+                      {card.uid}
+                    </span>
+                    <Badge tone={card.active ? 'success' : 'warning'}>
+                      {card.active ? 'Ativo' : 'Desativado'}
+                    </Badge>
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      disabled={busy}
+                      onClick={() =>
+                        run(
+                          () => setCardActive(card.id, !card.active),
+                          card.active ? 'Cartão desativado.' : 'Cartão ativado.',
+                        )
+                      }
+                    >
+                      {card.active ? 'Desativar' : 'Ativar'}
+                    </Button>
+                    <Button
+                      variant="dangerOutline"
+                      size="md"
+                      disabled={busy}
+                      onClick={() =>
+                        onConfirm({
+                          title: 'Remover este cartão?',
+                          description: `O cartão ${card.uid} deixa de registrar embarques de ${student.name}.`,
+                          confirmLabel: 'Remover cartão',
+                          danger: true,
+                          onConfirm: () => void run(() => deleteCard(card.id), 'Cartão removido.'),
+                        })
+                      }
+                    >
+                      Remover
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <form onSubmit={handleAddCard} className="flex flex-col gap-3">
+            <TextField
+              label="Código do cartão"
+              placeholder="Ex.: A1B2C3D4"
+              hint="Mais fácil: encoste o cartão no leitor e ele aparece no topo desta tela."
+              autoCapitalize="characters"
+              autoComplete="off"
+              spellCheck={false}
+              required
+              value={uid}
+              onChange={(e) => setUid(e.target.value)}
+            />
+            <Button type="submit" variant="secondary" size="md" disabled={busy}>
+              Adicionar cartão
+            </Button>
+          </form>
+
+          <Button
+            variant="dangerOutline"
+            size="md"
+            disabled={busy}
+            onClick={() =>
+              onConfirm({
+                title: `Apagar ${student.name}?`,
+                description:
+                  'Os cartões e os embarques deste aluno também serão apagados. Não dá para desfazer.',
+                confirmLabel: 'Apagar aluno',
+                danger: true,
+                onConfirm: () => void run(() => deleteStudent(student.id), 'Aluno apagado.'),
+              })
+            }
+          >
+            Apagar aluno
+          </Button>
+        </div>
+      </details>
+    </li>
   );
 }
 
 export function StudentsPage() {
   const { companyId } = useCurrentCompany();
+  const toast = useToast();
   const load = useCallback(async () => {
     const students = await listStudents(companyId);
     const registered = new Set(students.flatMap((s) => s.cards.map((c) => c.uid)));
@@ -110,98 +228,148 @@ export function StudentsPage() {
   }, [companyId]);
   const { data, loading, error, reload } = useAsyncData(load);
 
+  const [formOpen, setFormOpen] = useState<boolean>();
   const [name, setName] = useState('');
   const [city, setCity] = useState('');
+  const [query, setQuery] = useState('');
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const create = useSubmit(createStudent);
   const change = useSubmit(async (action: () => Promise<void>) => action());
+
+  // Sem nenhum aluno, o formulário já aparece aberto: é o próximo passo óbvio
+  const isEmpty = data?.students.length === 0;
+  const showForm = formOpen ?? isEmpty;
+  const visibleStudents = data ? searchStudents(data.students, query) : [];
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
     if (await create.submit(companyId, { name, city })) {
       setName('');
       setCity('');
+      setFormOpen(false);
+      toast('Aluno cadastrado.');
       reload();
     }
   }
 
-  async function run(action: () => Promise<void>): Promise<boolean> {
+  const run: Run = async (action, successMessage) => {
     const ok = await change.submit(action);
-    if (ok) reload();
+    if (ok) {
+      toast(successMessage);
+      reload();
+    }
     return ok;
-  }
+  };
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageTitle>Alunos</PageTitle>
-      <Panel title="Novo aluno">
-        <form onSubmit={handleCreate} className="flex flex-col gap-3">
-          <TextField
-            label="Nome"
-            required
-            maxLength={120}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <TextField
-            label="Cidade (opcional)"
-            maxLength={80}
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-          />
-          <ErrorMessage error={create.error} />
-          <Button type="submit" disabled={create.submitting}>
+    <>
+      <PageTitle description="Os alunos e o cartão que cada um usa para embarcar.">
+        Alunos
+      </PageTitle>
+
+      {showForm ? (
+        <Panel title="Novo aluno">
+          <form onSubmit={handleCreate} className="flex flex-col gap-4">
+            <TextField
+              label="Nome do aluno"
+              autoComplete="off"
+              required
+              maxLength={120}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <TextField
+              label="Cidade (se quiser)"
+              autoComplete="off"
+              maxLength={80}
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+            />
+            <ErrorMessage error={create.error} />
+            <Button type="submit" loading={create.submitting} loadingLabel="Cadastrando...">
+              Cadastrar aluno
+            </Button>
+            {!isEmpty && (
+              <Button
+                variant="secondary"
+                disabled={create.submitting}
+                onClick={() => setFormOpen(false)}
+              >
+                Cancelar
+              </Button>
+            )}
+          </form>
+        </Panel>
+      ) : (
+        data && (
+          <Button icon={<IconPlus />} onClick={() => setFormOpen(true)}>
             Cadastrar aluno
           </Button>
-        </form>
-      </Panel>
+        )
+      )}
 
       {loading && !data && <LoadingMessage />}
-      <ErrorMessage error={error ?? change.error} />
+      <ErrorMessage error={error} onRetry={reload} />
+      <ErrorMessage error={change.error} />
 
       {data && data.unknownCards.length > 0 && data.students.length > 0 && (
-        <Panel title="Cartões lidos e não cadastrados">
-          <p className="mb-2 text-sm text-slate-600">
-            Encoste o cartão novo em um leitor da empresa e ele aparece aqui.
+        <Panel title="Cartões novos para ligar a um aluno" className="border-2 border-amber-600">
+          <p className="mb-4 text-slate-700">
+            Estes cartões foram encostados no leitor e ainda não são de ninguém.
           </p>
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-slate-200">
             {data.unknownCards.map((card) => (
-              <li key={card.uid} className="flex flex-wrap items-end justify-between gap-2 py-2">
-                <div>
-                  <p className="font-mono">{card.uid}</p>
-                  <p className="text-xs text-slate-500">{formatDateTime(card.lastSeenAt)}</p>
-                </div>
-                <SelectField
-                  label="Vincular ao aluno"
-                  value=""
-                  disabled={change.submitting}
-                  onChange={(e) => {
-                    const studentId = e.target.value;
-                    void run(() => addCard(companyId, studentId, card.uid));
-                  }}
-                >
-                  <option value="">Escolha...</option>
-                  {data.students.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </SelectField>
-              </li>
+              <UnknownCardItem
+                key={card.uid}
+                card={card}
+                students={data.students}
+                busy={change.submitting}
+                onLink={(studentId) =>
+                  void run(() => addCard(companyId, studentId, card.uid), 'Cartão ligado ao aluno.')
+                }
+              />
             ))}
           </ul>
         </Panel>
       )}
 
-      {data?.students.length === 0 && <EmptyMessage>Nenhum aluno cadastrado.</EmptyMessage>}
-      {data?.students.map((student) => (
-        <StudentCard
-          key={student.id}
-          student={student}
-          busy={change.submitting}
-          onAddCard={(studentId, uid) => run(() => addCard(companyId, studentId, uid))}
-          onRun={(action) => void run(action)}
-        />
-      ))}
-    </div>
+      {isEmpty && (
+        <EmptyMessage title="Nenhum aluno cadastrado" icon={<IconStudents className="size-10" />}>
+          Preencha o nome acima para cadastrar o primeiro.
+        </EmptyMessage>
+      )}
+
+      {data && data.students.length > 0 && (
+        <Panel title={`Alunos cadastrados: ${data.students.length}`}>
+          {data.students.length >= SEARCH_FROM && (
+            <TextField
+              label="Procurar aluno pelo nome"
+              type="search"
+              autoComplete="off"
+              className="mb-2"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          )}
+          {visibleStudents.length === 0 && (
+            <EmptyMessage>Nenhum aluno com esse nome. Confira se digitou certo.</EmptyMessage>
+          )}
+          <ul className="divide-y divide-slate-200">
+            {visibleStudents.map((student) => (
+              <StudentItem
+                key={student.id}
+                student={student}
+                companyId={companyId}
+                busy={change.submitting}
+                run={run}
+                onConfirm={setConfirmation}
+              />
+            ))}
+          </ul>
+        </Panel>
+      )}
+
+      <ConfirmDialog confirmation={confirmation} onClose={() => setConfirmation(null)} />
+    </>
   );
 }

@@ -45,10 +45,12 @@ async function getBoarding(id: number): Promise<Boarding | null> {
   return data ? toBoarding(data) : null;
 }
 
-// Escuta só os embarques da van escolhida (nunca a tabela inteira); devolve a função para parar
+// Escuta só os embarques da van escolhida (nunca a tabela inteira); devolve a função para parar.
+// onConnectionChange avisa quando a escuta ao vivo liga ou cai (sinal ruim, celular em espera).
 export function subscribeToVanBoardings(
   vanId: string,
   onBoarding: (boarding: Boarding) => void,
+  onConnectionChange?: (connected: boolean) => void,
 ): () => void {
   const channel = supabase
     .channel(`boardings:${vanId}`)
@@ -63,7 +65,7 @@ export function subscribeToVanBoardings(
           .catch((error: unknown) => console.error('Falha ao carregar embarque recebido', error));
       },
     )
-    .subscribe();
+    .subscribe((status) => onConnectionChange?.(status === 'SUBSCRIBED'));
   return () => {
     void supabase.removeChannel(channel);
   };
