@@ -2,7 +2,7 @@
 
 > Arquivo de memória do projeto. Coloque na raiz do repositório como `CLAUDE.md` (vale para toda a equipe)
 > ou como `CLAUDE.local.md` (só para você, e fica fora do Git).
-> Última atualização: 10/11/2026.
+> Última atualização: 12/11/2026.
 
 ---
 
@@ -135,16 +135,17 @@ docs/
 
 ---
 
-## 4. Estado atual (10/11/2026)
+## 4. Estado atual (12/11/2026)
 
 - ✅ Projeto reconstruído no padrão da seção 7 (branch `feat/dev-architecture`): banco multi-tenant, Edge Function `register-boarding`, firmware no PlatformIO, app completo (cadastros + embarques em tempo real), testes e CI.
 - ✅ Novo esquema aplicado no Supabase remoto e Edge Function `register-boarding` publicada (o esquema do protótipo saiu).
-- ✅ Firmware novo gravado no ESP32, conectando pelo Wi-Fi de casa.
+- ✅ Firmware novo gravado no ESP32, conectando por Wi-Fi 2,4 GHz (hoje o hotspot do notebook).
 - ✅ **Primeira validação ponta a ponta (31/10/2026):** dono cadastrou empresa, van, motorista, aluno e leitor; o cartão desconhecido apareceu em "Cartões lidos e não cadastrados" (HTTP 404, 3 bips), foi vinculado ao aluno e o embarque seguinte apareceu sozinho no celular do motorista (HTTP 200, bip longo).
 - ✅ Reconstrução mergeada na `main` (PR #3).
 - ✅ **Fila offline do leitor (10/11/2026, PR #12):** na `main`, com a migração `read_at` aplicada no Supabase remoto e a Edge Function publicada. Feita para o requisito de decisão local do trabalho final de IoT (entrega até 23/11/2026).
-- ⏳ A fila offline **ainda não foi testada no ESP32**: falta rodar os itens 8 a 12 de `docs/testing/hardware-checklist.md`.
-- ⏳ Falta no roteiro de hardware: toque repetido e medir o tempo do bip até o registro (meta < 1 s).
+- ✅ **Fila offline testada no ESP32 (12/11/2026):** roteiro de hardware feito, menos os itens 6 e 7. Sem rede, o leitor guarda as leituras, elas sobrevivem a um desligamento, são reenviadas sozinhas quando a rede volta e o embarque fica com o horário do toque. Toque repetido e rajada de cartões também ok.
+- ⚠️ **Tempo do bip até o registro:** abaixo de 1 s com a conexão aberta (530 a 890 ms), mas de 1 a 1,5 s na primeira leitura depois de o leitor ficar parado e ~5 s logo depois de o Wi-Fi voltar. Manter a conexão aberta enquanto o leitor está parado ainda está em decisão.
+- ⏳ Falta no roteiro de hardware: itens 6 (token trocado) e 7 (leitor sem van).
 - ⚠️ A senha do Wi-Fi e o `device_token` do protótipo aparecem no histórico do Git. Ambos deixam de valer: o Wi-Fi era só de teste e o token antigo some com o esquema do protótipo.
 
 ### Fora da v1 / próximos passos conhecidos
